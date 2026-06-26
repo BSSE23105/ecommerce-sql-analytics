@@ -1,6 +1,6 @@
 # E-Commerce SQL Analytics
 
-This is a practice project I built during my internship at PITB. The idea was straightforward — set up a realistic e-commerce database in PostgreSQL, populate it with sample data, and then write analytical queries that actually tell you something useful about the business.
+This is a practice project inwhich I set up a realistic e-commerce database in PostgreSQL, populate it with sample data, and then write analytical queries that actually tell you something useful about the business.
 
 The dataset covers customers from 12 Pakistani cities, orders across 4 product categories (beauty, fragrances, furniture, groceries), and payments through local methods like EasyPaisa, JazzCash, and Cash on Delivery.
 
@@ -11,7 +11,7 @@ The dataset covers customers from 12 Pakistani cities, orders across 4 product c
 ```
 ecommerce-sql-analytics/
 │
-├── README.md                  -- you're reading it
+├── README.md                  
 ├── schema.sql                 -- create the tables from scratch
 ├── analytical_queries.sql     -- 13 queries covering all major SQL concepts
 │
