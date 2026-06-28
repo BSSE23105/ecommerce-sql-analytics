@@ -13,7 +13,7 @@ ecommerce-sql-analytics/
 │
 ├── README.md                  
 ├── schema.sql                 -- create the tables from scratch
-├── analytical_queries.sql     -- 13 queries covering all major SQL concepts
+├── queries.sql     -- 13 queries covering all major SQL concepts
 │
 └── data/
     ├── products.csv           -- 18 products across 4 categories
@@ -115,7 +115,7 @@ You should see: **18 / 40 / 159 / 107**
 
 ## Queries Overview
 
-All 13 queries are in `analytical_queries.sql`, each with a comment explaining what it does and why. Here's the summary:
+All 13 queries are in `queries.sql`, each with a comment explaining what it does and why. Here's the summary:
 
 | # | What it answers | Concepts |
 |---|---|---|

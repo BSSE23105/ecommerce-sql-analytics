@@ -12,6 +12,7 @@ select c.full_name, c.city, COUNT(o.order_id) AS orders_placed, SUM(pay.amount) 
 FROM customers c
 JOIN orders o     ON c.customer_id = o.customer_id
 JOIN payments pay ON o.order_id    = pay.order_id
+WHERE o.status = 'completed'
 GROUP BY c.customer_id, c.full_name, c.city
 ORDER BY total_spent DESC
 LIMIT 5;
@@ -49,28 +50,28 @@ ORDER BY city, rank_in_city;
 
 
 -- Query6: Running Total of Revenue
-SELECT pay.payment_date, pay.amount, SUM(pay.amount) OVER (
-        ORDER BY pay.payment_date
+select pay.payment_date, pay.amount, SUM(pay.amount) OVER (
+        ORDER BY pay.payment_date, pay.payment_id
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) AS running_total
 FROM payments pay
-ORDER BY pay.payment_date;
+ORDER BY pay.payment_date, pay.payment_id;
 
 
 -- Query7: Compare Each Payment to the Previous One
-SELECT pay.payment_id, pay.payment_date, pay.amount,
-    LAG(pay.amount)  OVER (ORDER BY pay.payment_date) AS previous_payment,
-    pay.amount - LAG(pay.amount) OVER (ORDER BY pay.payment_date) AS difference
+select pay.payment_id, pay.payment_date, pay.amount,
+    LAG(pay.amount)  OVER (ORDER BY pay.payment_date, pay.payment_id) AS previous_payment,
+    pay.amount - LAG(pay.amount) OVER (ORDER BY pay.payment_date, pay.payment_id) AS difference
 FROM payments pay
-ORDER BY pay.payment_date;
+ORDER BY pay.payment_date, pay.payment_id;
 
 
 -- Query8: Compare Each Payment to the Next One
-SELECT pay.payment_id, pay.payment_date, pay.amount,
-    LEAD(pay.amount) OVER (ORDER BY pay.payment_date) AS next_payment,
-    LEAD(pay.amount) OVER (ORDER BY pay.payment_date) - pay.amount AS upcoming_change
+select pay.payment_id, pay.payment_date, pay.amount,
+    LEAD(pay.amount) OVER (ORDER BY pay.payment_date, pay.payment_id) AS next_payment,
+    LEAD(pay.amount) OVER (ORDER BY pay.payment_date, pay.payment_id) - pay.amount AS upcoming_change
 FROM payments pay
-ORDER BY pay.payment_date;
+ORDER BY pay.payment_date, pay.payment_id;
 
 
 -- Query9: Put each customer's orders in time order and give them numbers
@@ -100,19 +101,19 @@ ORDER BY pay.amount DESC;
 
 -- Query11: Customers Who Never Completed an Order
 WITH completed_orders AS (
-    SELECT DISTINCT customer_id
+    select DISTINCT customer_id
     FROM orders
     WHERE status = 'completed'
 )
-SELECT c.full_name, c.email, c.city
+select c.full_name, c.email, c.city
 FROM customers c
-WHERE c.customer_id NOT IN (SELECT customer_id FROM completed_orders)
+WHERE c.customer_id NOT IN (select customer_id FROM completed_orders)
 ORDER BY c.full_name;
 
 
 -- Query12: Most Used Payment Method Per City
 WITH city_payment_counts AS (
-    SELECT c.city, pay.method, COUNT(*) AS usage_count,
+    select c.city, pay.method, COUNT(*) AS usage_count,
         RANK() OVER (PARTITION BY c.city ORDER BY COUNT(*) DESC) AS rnk
     FROM payments pay
     JOIN orders o    ON pay.order_id    = o.order_id
@@ -126,15 +127,11 @@ ORDER BY city;
 
 
 -- Query13: Return Rate Per Product with Risk Flag
-SELECT p.title, COUNT(o.order_id) AS total_orders,
+select p.title, COUNT(o.order_id) AS total_orders,
     SUM(CASE WHEN o.status = 'returned' THEN 1 ELSE 0 END) AS returns,
-    ROUND(
-        SUM(CASE WHEN o.status = 'returned' THEN 1 ELSE 0 END)
-        * 100.0 / COUNT(o.order_id), 2
-    )                                                           AS return_rate_pct,
+    ROUND(SUM(CASE WHEN o.status = 'returned' THEN 1 ELSE 0 END) * 100.0 / COUNT(o.order_id), 2) AS return_rate_pct,
     CASE
-        WHEN SUM(CASE WHEN o.status = 'returned' THEN 1 ELSE 0 END)
-             * 100.0 / COUNT(o.order_id) > 20
+        WHEN SUM(CASE WHEN o.status = 'returned' THEN 1 ELSE 0 END) * 100.0 / COUNT(o.order_id) > 20
         THEN 'High Return Risk'
         ELSE 'Normal'
     END AS return_flag
