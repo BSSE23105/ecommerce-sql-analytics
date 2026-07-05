@@ -82,6 +82,7 @@ customers ──┘
 
 Open DBeaver, connect to your PostgreSQL database, open `schema.sql` and run it. This creates all 4 tables with the right constraints.
 
+
 ### 2. Import the CSVs in this order
 
 The order matters because of foreign keys — you can't import orders before products and customers exist.
