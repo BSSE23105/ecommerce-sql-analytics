@@ -1,6 +1,6 @@
 # E-Commerce SQL Analytics
 
-A practice project where I set up a realistic e-commerce database in PostgreSQL, populate it with sample data, and then work with it two ways: writing analytical SQL by hand (Task 1) and building a Python ETL pipeline that loads and reports on the data automatically (Task 2).
+A practice project where I set up a realistic e-commerce database in PostgreSQL, populate it with sample data, and then work with it three ways: writing analytical SQL by hand (Task 1), building a Python ETL pipeline that loads and reports on the data automatically (Task 2), and designing a star-schema data warehouse with a Python transformation layer (Task 3).
 
 The dataset covers customers from 12 Pakistani cities, orders across 4 product categories (beauty, fragrances, furniture, groceries), and payments through local methods like EasyPaisa, JazzCash, and Cash on Delivery.
 
@@ -23,12 +23,17 @@ ecommerce-sql-analytics/
 │   ├── orders.csv
 │   └── payments.csv
 │
-└── task2/                     -- Task 2 ETL pipeline
-    ├── generate_data.py       -- make the raw (messy) CSV files
-    ├── extract_load.py        -- clean the CSVs and load them into PostgreSQL
-    ├── export_report.py       -- export a summary sales report
-    ├── requirements.txt       -- Python packages needed
-    └── .env.example           -- template for DB credentials
+├── task2/                     -- Task 2 ETL pipeline
+│   ├── generate_data.py       -- make the raw (messy) CSV files
+│   ├── extract_load.py        -- clean the CSVs and load them into PostgreSQL
+│   ├── export_report.py       -- export the summary sales report (Excel)
+│   ├── db_connection.py       -- reusable database connection helper
+│   ├── requirements.txt       -- Python packages needed
+│   └── .env.example           -- template for DB credentials
+│
+└── task3/                     -- Task 3 data warehouse (star schema)
+    ├── warehouse_schema.sql   -- the warehouse schema (dim + fact tables)
+    └── load_warehouse.py      -- load the warehouse from the OLTP tables
 ```
 
 ---
@@ -156,9 +161,11 @@ Task 1 loaded data manually through DBeaver. Task 2 builds a proper ETL pipeline
 |---|---|
 | `generate_data.py` | Creates the raw CSVs (`customers_raw.csv`, `products_raw.csv`, `orders_raw.csv`) using the Faker library. The data is intentionally messy (nulls, duplicate emails, bad prices, invalid dates, broken references) to simulate a real frontend export. |
 | `extract_load.py` | Reads the raw CSVs with pandas, validates each row, and loads the clean ones into PostgreSQL with SQLAlchemy. Any bad row is written to `rejected_records.csv` with a reason — the dead-letter pattern. |
-| `export_report.py` | Runs summary queries and exports `weekly_sales_report.csv`: revenue per category, top 5 customers, orders by status, and month-over-month revenue change. |
+| `export_report.py` | Runs summary queries and exports `weekly_sales_report.xlsx` (four worksheets): revenue per category, top 5 customers, orders by status, and month-over-month revenue change. |
+| `db_connection.py` | A single reusable `connect_db()` shared by every script. It reads the credentials, opens the engine, and checks the connection actually works — failing with a clear message instead of a crash. |
 
-Database credentials are never hardcoded — they are read from a `.env` file.
+Database credentials are never hardcoded — they are read from a `.env` file. All scripts use the
+`logging` module, so every run is timestamped.
 
 ## How to run it
 
@@ -200,15 +207,75 @@ python extract_load.py      # cleans + loads into PostgreSQL, writes rejected ro
 python export_report.py     # writes the sales report
 ```
 
+> `extract_load.py` asks you to confirm before it clears the tables. Add `--force` to skip the
+> prompt (`python extract_load.py --force`).
+
 ## What you get
 
 | File | Description |
 |---|---|
 | `raw/customers_raw.csv`, `raw/products_raw.csv`, `raw/orders_raw.csv` | The messy input data. |
 | `output/rejected_records.csv` | Every rejected row with a `rejection_reason` column. |
-| `output/weekly_sales_report.csv` | The final summary report. |
+| `output/weekly_sales_report.xlsx` | The final summary report — one worksheet per section. |
 
 The pipeline is safe to re-run — `extract_load.py` clears the tables before each load, so you never get duplicates.
+
+---
+
+# Task 3 — Data Warehouse (Star Schema)
+
+Task 2 built the operational database (OLTP) — good for day-to-day reads and writes. Task 3 adds a
+separate **data warehouse**: the same data reshaped into a **star schema** that's built for analysis
+and reporting. A Python transformation script reads the OLTP tables and loads a new `warehouse`
+schema.
+
+## The star schema
+
+One central **fact** table surrounded by three **dimension** tables:
+
+```
+dim_customers ──┐
+dim_products  ──┼──▶  fact_orders
+dim_date      ──┘
+```
+
+| Table | What it holds |
+|---|---|
+| `dim_customers` | One row per customer. Has a surrogate `customer_key` plus the natural `customer_id`. |
+| `dim_products` | One row per product. Surrogate `product_key` plus the natural `product_id`. |
+| `dim_date` | One row per calendar day, keyed `YYYYMMDD`, with year / quarter / month / day-name / weekend flag. |
+| `fact_orders` | One row per order (the *grain*). Points at the three dimensions by their keys and stores the measures: `quantity`, `unit_price`, `total_amount`. |
+
+Key ideas: **surrogate keys** (warehouse-only ids the fact points at), **natural keys** (the original
+business ids), **grain** (one row per order), and **SCD Type 1** dimensions (rebuilt on each load).
+
+## How to run it
+
+From the `task3` folder, using the same virtual environment and `.env` from Task 2:
+
+```powershell
+cd task3
+python load_warehouse.py
+```
+
+The script creates the `warehouse` schema automatically (you don't need to run
+`warehouse_schema.sql` by hand), then loads the dimensions and the fact. Like Task 2, it asks before
+clearing the warehouse; add `--force` to skip the prompt.
+
+> The Task 2 pipeline must have loaded the OLTP tables first — Task 3 reads from them.
+
+## What you get
+
+A new `warehouse` schema in the same PostgreSQL database. In DBeaver:
+**Schemas → warehouse → Tables** to view `dim_customers`, `dim_products`, `dim_date`, and
+`fact_orders` (press **F5** to refresh if they don't appear).
+
+```sql
+SELECT 'dim_customers' AS tbl, COUNT(*) FROM warehouse.dim_customers
+UNION ALL SELECT 'dim_products', COUNT(*) FROM warehouse.dim_products
+UNION ALL SELECT 'dim_date',     COUNT(*) FROM warehouse.dim_date
+UNION ALL SELECT 'fact_orders',  COUNT(*) FROM warehouse.fact_orders;
+```
 
 ---
 
@@ -216,5 +283,5 @@ The pipeline is safe to re-run — `extract_load.py` clears the tables before ea
 
 - PostgreSQL 15
 - DBeaver 24
-- Python 3 (pandas, SQLAlchemy, psycopg2, python-dotenv, Faker)
+- Python 3 (pandas, SQLAlchemy, psycopg2, python-dotenv, Faker, openpyxl)
 - Git + GitHub

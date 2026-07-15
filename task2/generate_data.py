@@ -1,7 +1,10 @@
 import os
 import csv
 import random
+import logging
 from faker import Faker
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 fake = Faker()
 Faker.seed(42)
@@ -31,9 +34,11 @@ for cid in range(1, 301):
     signup = fake.date_between(start_date="-1y", end_date="today").isoformat()
 
     if chance(0.05): name = ""
-    if chance(0.05): email = ""
-    elif chance(0.05): email = email.replace("@", "")
-    elif emails_seen and chance(0.05): email = random.choice(emails_seen)
+    # pick at most one email problem from a single roll so each type shows up on its own ~5% of the time
+    roll = random.random()
+    if roll < 0.05: email = ""
+    elif roll < 0.10: email = email.replace("@", "")
+    elif roll < 0.15 and emails_seen: email = random.choice(emails_seen)
     if chance(0.05): city = ""
     if chance(0.05): signup = "not-a-date"
 
@@ -95,5 +100,5 @@ with open(os.path.join(raw_dir, "orders_raw.csv"), "w", newline="", encoding="ut
     w.writerows(order_rows)
 
 
-print("Done. Raw files are in:", raw_dir)
-print(f"customers={len(cust_rows)}  products={len(prod_rows)}  orders={len(order_rows)}")
+logging.info("Done. Raw files are in: %s", raw_dir)
+logging.info("customers=%d  products=%d  orders=%d", len(cust_rows), len(prod_rows), len(order_rows))

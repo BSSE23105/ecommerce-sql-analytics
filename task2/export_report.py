@@ -1,22 +1,13 @@
 import os
+import logging
 
 import pandas as pd
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
+
+from db_connection import connect_db
 
 here = os.path.dirname(os.path.abspath(__file__))
 out_dir = os.path.join(here, "output")
 os.makedirs(out_dir, exist_ok=True)
-load_dotenv(os.path.join(here, ".env"))
-
-
-def connect_db():
-    user = os.getenv("DB_USER")
-    pw = os.getenv("DB_PASSWORD")
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    name = os.getenv("DB_NAME")
-    return create_engine(f"postgresql+psycopg2://{user}:{pw}@{host}:{port}/{name}")
 
 
 revenue_sql = """
@@ -75,28 +66,29 @@ ORDER BY month;
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
     db = connect_db()
 
+    # run the four summary queries against the loaded data
+    logging.info("Running the report queries...")
     revenue = pd.read_sql(revenue_sql, db)
     top_customers = pd.read_sql(top_customers_sql, db)
     by_status = pd.read_sql(status_sql, db)
     mom = pd.read_sql(mom_sql, db)
 
-    report_path = os.path.join(out_dir, "weekly_sales_report.csv")
+    # write each result to its own worksheet so every table keeps its own headers
+    report_path = os.path.join(out_dir, "weekly_sales_report.xlsx")
+    sheets = [("Revenue by Category", revenue),
+              ("Top Customers", top_customers),
+              ("Orders by Status", by_status),
+              ("MoM Revenue", mom)]
 
-    # put all four results in one file, each under its own title line
-    sections = [("Total Revenue per Category", revenue),
-                ("Top 5 Customers by Spend", top_customers),
-                ("Orders Count by Status", by_status),
-                ("Month-over-Month Revenue Change", mom)]
+    with pd.ExcelWriter(report_path, engine="openpyxl") as xl:
+        for sheet_name, table in sheets:
+            table.to_excel(xl, sheet_name=sheet_name, index=False)
 
-    with open(report_path, "w", newline="", encoding="utf-8") as f:
-        for title, table in sections:
-            f.write(f"# {title}\n")
-            table.to_csv(f, index=False)
-            f.write("\n")
-
-    print("Report saved to", report_path)
+    logging.info("Report saved to %s", report_path)
 
 
 if __name__ == "__main__":
