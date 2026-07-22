@@ -4,3 +4,4 @@ psycopg2-binary==2.9.12
 python-dotenv==1.2.2
 Faker==40.28.1
 openpyxl==3.1.5
+matplotlib==3.11.1

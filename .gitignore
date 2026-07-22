@@ -1,5 +1,5 @@
 # Secrets - never commit real credentials
-task2/.env
+.env
 
 # Python virtual environment
 .venv/
@@ -13,7 +13,10 @@ __pycache__/
 steps.md
 task2/*-explained.md
 task3/*-explained.md
+task4/*-explained.md
 summary-task3.md
+summary-task4.md
+issues-task3.md
 
 # Generated data and outputs
 task2/raw/

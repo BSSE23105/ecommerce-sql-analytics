@@ -6,8 +6,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 
-here = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(here, ".env"))
+# this file lives in utils/, so the project root (where .env sits) is one folder up
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(root, ".env"))
 
 
 def connect_db():

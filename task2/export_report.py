@@ -1,9 +1,12 @@
 import os
+import sys
 import logging
 
 import pandas as pd
 
-from db_connection import connect_db
+# the shared connection helper sits in utils/ at the project root, so put the root on the import path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.db_connection import connect_db
 
 here = os.path.dirname(os.path.abspath(__file__))
 out_dir = os.path.join(here, "output")

@@ -6,11 +6,29 @@ import logging
 import pandas as pd
 from sqlalchemy import text
 
-# reuse the same database helper we built in task 2 instead of copying the connection code
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "task2"))
-from db_connection import connect_db
+# the shared connection helper sits in utils/ at the project root, so put the root on the import path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.db_connection import connect_db
 
 here = os.path.dirname(os.path.abspath(__file__))
+
+customers_sql = text("""
+    SELECT customer_id, full_name, email, city, signup_date
+    FROM customers
+    ORDER BY customer_id
+""")
+
+products_sql = text("""
+    SELECT product_id, title, category, price
+    FROM products
+    ORDER BY product_id
+""")
+
+orders_sql = text("""
+    SELECT order_id, customer_id, product_id, quantity, order_date, status
+    FROM orders
+    ORDER BY order_id
+""")
 
 
 def apply_schema(db):
@@ -22,17 +40,17 @@ def apply_schema(db):
 
 
 def build_customer_dim(customers):
-    # give every customer a surrogate key (1, 2, 3...) after sorting so the keys stay the same each run
-    dim = customers.sort_values("customer_id").reset_index(drop=True)
-    dim.insert(0, "customer_key", list(range(1, len(dim) + 1)))
+    # the surrogate key is just the customer_id, so a key never moves when rows get added or deleted
+    dim = customers.copy()
+    dim.insert(0, "customer_key", dim["customer_id"])
     key_map = dict(zip(dim["customer_id"], dim["customer_key"]))
     return dim, key_map
 
 
 def build_product_dim(products):
-    # same idea as customers: a fresh surrogate key per product
-    dim = products.sort_values("product_id").reset_index(drop=True)
-    dim.insert(0, "product_key", list(range(1, len(dim) + 1)))
+    # same idea as customers: reuse the natural id so the key stays the same on every reload
+    dim = products.copy()
+    dim.insert(0, "product_key", dim["product_id"])
     key_map = dict(zip(dim["product_id"], dim["product_key"]))
     return dim, key_map
 
@@ -82,6 +100,18 @@ def confirm_truncate(force):
     return answer.strip().lower() == "yes"
 
 
+def verify_load(db):
+    # don't trust what we sent, ask the database what actually landed in each table
+    tables = ["dim_customers", "dim_products", "dim_date", "fact_orders"]
+    with db.connect() as conn:
+        for table in tables:
+            rows = conn.execute(text(f"SELECT COUNT(*) FROM warehouse.{table}")).scalar()
+            logging.info("verified  warehouse.%s = %d rows", table, rows)
+        total = conn.execute(text("SELECT COALESCE(SUM(total_amount), 0) FROM warehouse.fact_orders "
+                                  "WHERE status = 'completed'")).scalar()
+    logging.info("verified  completed revenue in the warehouse = %s", total)
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -94,9 +124,10 @@ def main():
 
     # read the operational tables that task 2 already loaded
     logging.info("Reading the OLTP tables...")
-    customers = pd.read_sql("SELECT * FROM customers", db)
-    products = pd.read_sql("SELECT * FROM products", db)
-    orders = pd.read_sql("SELECT * FROM orders", db)
+    with db.connect() as conn:
+        customers = pd.read_sql(customers_sql, conn)
+        products = pd.read_sql(products_sql, conn)
+        orders = pd.read_sql(orders_sql, conn)
 
     if orders.empty:
         logging.error("No orders found in the OLTP database. Run the task 2 pipeline first.")
@@ -131,6 +162,7 @@ def main():
 
     logging.info("Warehouse loaded  dim_customers=%d  dim_products=%d  dim_date=%d  fact_orders=%d",
                  len(dim_customers), len(dim_products), len(dim_date), len(fact_orders))
+    verify_load(db)
 
 
 if __name__ == "__main__":
